@@ -3,6 +3,9 @@
 /.vscode
 /collectstatic
 /static
+/staticfiles
+/media
+/mediafiles
 
 /celeryschedule
 /env
@@ -31,6 +34,19 @@ weatherstations/migrations/
 
 crowdsource/__pycache__/
 crowdsource/migrations/
+
+dashboard/__pycache__/
+dashboard/migrations/
+
+# Static files
+*.css.map
+*.js.map
+node_modules/
+bower_components/
+
+# Compiled static
+*.min.css
+*.min.js
 
 # Environment variables
 .env
