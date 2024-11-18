@@ -14,7 +14,6 @@ class WeatherStation(models.Model):
 
 class Waterlevel_Data(models.Model):
     station = models.ForeignKey(WeatherStation, on_delete=models.CASCADE)
-
     waterlevel = models.FloatField(default=0)
     timestamp = models.DateTimeField(auto_now_add=True)
 

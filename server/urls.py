@@ -9,12 +9,11 @@ admin.site.site_title = 'Mumbai Flood Admin Panel' # default: "Django site admin
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path ('health/', health_check),
+    path('health/', health_check),
 
-    path('blogs/', include('blogs.urls')),
     path('cs/', include('crowdsource.urls')),
     path('aws/', include('awsstations.urls')),
     path('weather/', include('weatherstations.urls')),  
     path('db/', include('dbmiddlelayer.urls')),
-
+    path('dashboard/', include('dashboard.urls')),
 ]

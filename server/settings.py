@@ -1,29 +1,26 @@
-
 from pathlib import Path
 from datetime import timedelta
 import os
+from dotenv import load_dotenv
 
+# Load environment variables from .env file
+load_dotenv()
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  
+# Build paths inside the project like this: BASE_DIR / 'subdir'.
+BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-%b#i7-j1&gkl5p&&ggj=rcn4w+#_y69t+4er7eesx92*$^j@0e'
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-default-key-for-dev')
 
-DEBUG = True
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '*').split(',')
 
-CORS_ORIGIN_ALLOW_ALL = True
+# CORS settings
+CORS_ORIGIN_ALLOW_ALL = DEBUG  # Only allow all origins in debug mode
 CORS_ALLOW_CREDENTIALS = True
-CORS_ORIGIN_WHITELIST = [
-    'http://localhost:3000',
-    'http://192.168.0.114:8000',
-    'http://194.238.18.228',
-    'https://194.238.18.228',
-    'https://www.mumbaiflood.in',
-    'https://mumbaiflood.in',
-    'http://mumbaiflood.in',
-    'http://www.mumbaiflood.in',
-]
+CORS_ORIGIN_WHITELIST = os.getenv('DJANGO_CORS_ORIGIN_WHITELIST', 'http://localhost:3000').split(',')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -36,8 +33,8 @@ INSTALLED_APPS = [
     'weatherstations',
     'awsstations',
     'crowdsource',
-    'blogs',
     'dbmiddlelayer',
+    'dashboard',
     
     'rest_framework',
 ]
@@ -59,7 +56,10 @@ ROOT_URLCONF = 'server.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'templates')],
+        'DIRS': [
+            os.path.join(BASE_DIR, 'templates'),
+            os.path.join(BASE_DIR, 'dashboard', 'templates'),
+        ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -77,12 +77,12 @@ WSGI_APPLICATION = 'server.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'climatedb',
-        'USER': 'climate',
-        'PASSWORD': 'HDFCERGOweb2023',
-        'HOST': '194.238.18.228',
-        'PORT': '5432',
+        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+        'NAME': os.getenv('DB_NAME', 'climatedb'),
+        'USER': os.getenv('DB_USER', 'climate'),
+        'PASSWORD': os.getenv('DB_PASSWORD', ''),
+        'HOST': os.getenv('DB_HOST', '194.238.18.228'),
+        'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
 
@@ -105,7 +105,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'Asia/Kolkata'
+TIME_ZONE = os.getenv('TIME_ZONE', 'Asia/Kolkata')
 
 
 USE_I18N = True
@@ -113,12 +113,11 @@ USE_I18N = True
 USE_TZ = True
 
 
-STATIC_URL = '/static/'
+STATIC_URL = os.getenv('STATIC_URL', '/static/')
 STATIC_ROOT = os.path.join(BASE_DIR, 'static/')
 
-MEDIA_URL = '/media/'
+MEDIA_URL = os.getenv('MEDIA_URL', '/media/')
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media/')
 
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-

@@ -31,3 +31,36 @@ weatherstations/migrations/
 
 crowdsource/__pycache__/
 crowdsource/migrations/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# IDE specific files
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Test cache
+.pytest_cache/
+.tox/
+.nox/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Logs
+*.log
+logs/
