@@ -122,3 +122,30 @@ class StationDetailView(APIView):
             'seasonal_data': seasonaldata,
             'mobile_daily_data': mobile_daily_data
         })
+class StationRawDataView(APIView):
+    def get(self, request, station_id):
+        try:
+            station = AWSStation.objects.get(station_id=station_id)
+            
+            # Get only today's data (24 hours = 96 data points max) (15 minutes data)
+            now_time = timezone.now()
+            today_start = now_time.replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            raw_data = StationData.objects.filter(
+                station=station, 
+                timestamp__gte=today_start,
+                timestamp__lte=now_time
+            ).order_by('timestamp')
+            
+            formatted_data = [
+                {
+                    'timestamp': record.timestamp.isoformat(),
+                    'rainfall': record.rainfall
+                }
+                for record in raw_data
+            ]
+            
+            return Response(formatted_data)
+            
+        except AWSStation.DoesNotExist:
+            return Response({'error': 'Station not found'}, status=status.HTTP_404_NOT_FOUND)
