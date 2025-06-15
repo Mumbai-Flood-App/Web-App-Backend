@@ -62,22 +62,30 @@ class StationDetailView(APIView):
             # Process daily data
             update_daily_data = []
             
-            # Add past observed data with their predictions
+            MAX_REASONABLE_RAINFALL = 1000  # mm, adjust as needed
+
             for data in daily_data:
-                # Get the prediction that was made for this day
                 pred_date = data['date'] - timedelta(days=1)
                 past_prediction = DaywisePrediction.objects.filter(
                     station=station,
                     timestamp__date=pred_date
                 ).first()
-
+            
+                predicted_value = past_prediction.day1_rainfall if past_prediction else 0
+            
+                # Debug print
+                print(f"Observed date: {data['date']}, pred_date: {pred_date}, predicted_value: {predicted_value}")
+            
+                if predicted_value > MAX_REASONABLE_RAINFALL or predicted_value < 0:
+                    print(f"Unreasonable predicted value for {data['date']}: {predicted_value}, setting to 0")
+                    predicted_value = 0
+            
                 update_daily_data.append({
                     'date': str(data['date']),
                     'observed': data['total_rainfall'],
-                    'predicted': past_prediction.day1_rainfall if past_prediction else 0,
+                    'predicted': predicted_value,
                     'is_forecasted': False
                 })
-            
             # Add future predictions
             for i in range(1, 4):  # Next 3 days
                 future_date = today + timedelta(days=i)
