@@ -29,99 +29,86 @@ class TrainStationListView(APIView):
         # return Response({ 'message': 'Under Construction' }, status=status.HTTP_501_NOT_IMPLEMENTED)
 
 class StationDetailView(APIView):
-    # def get(self, request, staion_id):
-    #     return Response({
-    #         'message': 'Under Construction'
-    #     })
     def get(self, request, station_id):
         now_time = timezone.now()
+        today = now_time.date()
+        
+        try:
+            # Fetch station
+            station = AWSStation.objects.get(station_id=station_id)
+            serializer = AWSStationSerializer(station).data
 
-        # Fetch station and serialize it
-        station = AWSStation.objects.get(station_id=station_id)
-        serializer = AWSStationSerializer(station).data
+            # Get observed data for past 3 days
+            three_days_ago = today - timedelta(days=3)
+            daily_data = (
+                StationData.objects
+                .filter(
+                    station=station, 
+                    timestamp__gte=three_days_ago, 
+                    timestamp__lte=now_time
+                )
+                .annotate(date=TruncDate('timestamp'))
+                .values('date')
+                .annotate(total_rainfall=Sum('rainfall'))
+                .order_by('date')
+            )
 
-        # Fetch hourly data for the last 6 hours and pred for next 24 hours
-        pred_hrly_data = HourlyPrediction.objects.filter(station=station).latest('timestamp')
-        hrly_data = StationData.objects.filter(station=station, timestamp__gte=now_time-timedelta(hours=24)).annotate(hour=TruncHour('timestamp')).values('hour').annotate(total_rainfall=Sum('rainfall')).order_by('hour')
+            # Get latest predictions
+            pred_daily_data = DaywisePrediction.objects.filter(
+                station=station, 
+                timestamp__isnull=False
+            ).latest('timestamp')
 
-
-        update_hrly_data = [
-            {
-                'hour': data['hour'].strftime('%H:00'),
-                'total_rainfall': data['total_rainfall']
-            }
-            for data in hrly_data
-        ]
-
-        # Fetch daily data for the last 4 days
-        three_days_ago = now_time.date() - timedelta(days=3)
-        daily_data = (
-            StationData.objects
-            .filter(station=station, timestamp__gte=three_days_ago, timestamp__lte=(now_time))
-            .annotate(date=TruncDate('timestamp'))
-            .values('date')
-            .annotate(total_rainfall=Sum('rainfall'))
-            .order_by('date')[:4]
-        )
-
-        pred_daily_data = DaywisePrediction.objects.filter(station=station, timestamp__isnull=False).latest('timestamp')
-
-        try :
-            update_daily_data = [
-                {
-                    'date': str(data['date']) ,
-                    'predicted': DaywisePrediction.objects.filter(station=station, timestamp__date=data['date']-timedelta(days=1)).first().day1_rainfall if DaywisePrediction.objects.filter(station=station, timestamp__date=data['date']-timedelta(days=1)) else 0,
-                    'observed': data['total_rainfall']
-                } for data in (daily_data[:3] if pred_daily_data.timestamp.date() != now_time.date() else daily_data[1:])
-            ] + [
-                {
-                    'date': (now_time.date() + timedelta(days=i)).strftime('%Y-%m-%d') if pred_daily_data.timestamp.date() == now_time.date() else (now_time.date() + timedelta(days=i-1)).strftime('%Y-%m-%d'),
-                    'predicted': getattr(pred_daily_data, f'day{i}_rainfall', 0),
-                    'observed': 0
-
-                } for i in [1,2,3]
-            ]
-
-        except Exception as e:
-            print(e)
+            # Process daily data
             update_daily_data = []
-
-        mobile_daily_data = {}
-        try:             
-            for data in daily_data[:3] if pred_daily_data.timestamp.date() != now_time.date() else daily_data[1:]:
-                mobile_daily_data[str(data['date'])] = data['total_rainfall']
             
-            i = 1 if pred_daily_data.timestamp.date() == now_time.date() else 0
-            mobile_daily_data[(now_time.date() + timedelta(days=i)).strftime('%Y-%m-%d')] = pred_daily_data.day1_rainfall
-            mobile_daily_data[(now_time.date() + timedelta(days=i+1)).strftime('%Y-%m-%d')] = pred_daily_data.day2_rainfall
-            mobile_daily_data[(now_time.date() + timedelta(days=i+2)).strftime('%Y-%m-%d')] = pred_daily_data.day3_rainfall
+            # Add past observed data with their predictions
+            for data in daily_data:
+                # Get the prediction that was made for this day
+                pred_date = data['date'] - timedelta(days=1)
+                past_prediction = DaywisePrediction.objects.filter(
+                    station=station,
+                    timestamp__date=pred_date
+                ).first()
 
+                update_daily_data.append({
+                    'date': str(data['date']),
+                    'observed': data['total_rainfall'],
+                    'predicted': past_prediction.day1_rainfall if past_prediction else 0,
+                    'is_forecasted': False
+                })
+            
+            # Add future predictions
+            for i in range(1, 4):  # Next 3 days
+                future_date = today + timedelta(days=i)
+                update_daily_data.append({
+                    'date': future_date.strftime('%Y-%m-%d'),
+                    'observed': 0,
+                    'predicted': getattr(pred_daily_data, f'day{i}_rainfall', 0),
+                    'is_forecasted': True
+                })
+
+            # Sort by date to ensure correct order
+            update_daily_data.sort(key=lambda x: x['date'])
+
+            return Response({
+                'station': serializer,
+                'daily_data': update_daily_data,
+                'hrly_data': update_hrly_data,  # Your existing hourly data
+                'seasonal_data': seasonaldata,  # Your existing seasonal data
+                'mobile_daily_data': mobile_daily_data  # Your existing mobile data
+            })
+
+        except AWSStation.DoesNotExist:
+            return Response(
+                {'error': 'Station not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
         except Exception as e:
-            print(e)
-
-
-        # Fetch seasonal data
-
-        stationdatas = StationData.objects.filter(station=station).annotate(day=TruncDate('timestamp')).values('day').annotate(total_rainfall=Sum('rainfall')).order_by('day')
-        stationdatas = stationdatas[: len(stationdatas) - 1]
-        # print(stationdatas.total_rainfall)
-
-        seasonaldata = [
-            {
-                'date': data['day'].strftime('%Y-%m-%d'),
-                'observed' : data['total_rainfall'],
-                'predicted' : DaywisePrediction.objects.filter(station=station, timestamp__date=(data['day'] - timedelta(days=1))).first().day1_rainfall if DaywisePrediction.objects.filter(station=station, timestamp__date=(data['day'] - timedelta(days=1))).first() else 0
-            }
-            for data in stationdatas
-        ]
-
-        return Response({
-            'station': serializer,
-            'hrly_data': update_hrly_data,
-            'daily_data': update_daily_data,
-            'seasonal_data': seasonaldata,
-            'mobile_daily_data': mobile_daily_data
-        })
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 class StationRawDataView(APIView):
     def get(self, request, station_id):
         try:
