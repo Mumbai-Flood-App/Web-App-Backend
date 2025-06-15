@@ -69,7 +69,7 @@ class StationDetailView(APIView):
                 past_prediction = DaywisePrediction.objects.filter(
                     station=station,
                     timestamp__date=pred_date
-                ).first()
+                ).order_by('-timestamp').first()  # Get the latest prediction from yesterday
             
                 predicted_value = past_prediction.day1_rainfall if past_prediction else 0
             
