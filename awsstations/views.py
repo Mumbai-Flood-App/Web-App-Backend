@@ -94,9 +94,9 @@ class StationDetailView(APIView):
             return Response({
                 'station': serializer,
                 'daily_data': update_daily_data,
-                'hrly_data': update_hrly_data,  # Your existing hourly data
-                'seasonal_data': seasonaldata,  # Your existing seasonal data
-                'mobile_daily_data': mobile_daily_data  # Your existing mobile data
+                #'hrly_data': update_hrly_data,  # Your existing hourly data
+                #'seasonal_data': seasonaldata,  # Your existing seasonal data
+                #'mobile_daily_data': mobile_daily_data  # Your existing mobile data
             })
 
         except AWSStation.DoesNotExist:
