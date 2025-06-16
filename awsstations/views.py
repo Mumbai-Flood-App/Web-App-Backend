@@ -57,34 +57,8 @@ class StationDetailView(APIView):
                 manual_daily_sums[date_str] += data.rainfall
                 print(f"DEBUG - Manual: Date {date_str}, Time {data.timestamp.strftime('%H:%M')}, Rainfall {data.rainfall}, Running total {manual_daily_sums[date_str]}")
 
-            # Database aggregation
-            raw_data = (
-                StationData.objects
-                .filter(
-                    station=station, 
-                    timestamp__gte=three_days_ago, 
-                    timestamp__lte=now_time
-                )
-                .annotate(
-                    date=TruncDate('timestamp')
-                )
-                .values('date')
-                .annotate(total_rainfall=Sum('rainfall'))
-                .order_by('date')
-            )
-
-            # Debug: Print database aggregation results
-            print("\nDEBUG - Database Aggregation Results:")
-            for data in raw_data:
-                date_str = data['date'].strftime('%Y-%m-%d')
-                print(f"Date: {date_str}, Total Rainfall: {data['total_rainfall']}")
-                print(f"Manual total for same date: {manual_daily_sums.get(date_str, 0)}")
-
-            # Convert to dictionary for easier lookup
-            daily_sums = {
-                data['date'].strftime('%Y-%m-%d'): data['total_rainfall']
-                for data in raw_data
-            }
+            # Database aggregation - using the manual totals since they appear more accurate
+            daily_sums = manual_daily_sums
 
             # Get latest predictions
             pred_daily_data = DaywisePrediction.objects.filter(
@@ -113,8 +87,7 @@ class StationDetailView(APIView):
                 # Debug print
                 print(f"Observed date: {date_str}, pred_date: {pred_date}, predicted_value: {predicted_value}")
                 print(f"DEBUG - Final values for {date_str}:")
-                print(f"  Database total: {total_rainfall}")
-                print(f"  Manual total: {manual_daily_sums.get(date_str, 0)}")
+                print(f"  Total rainfall: {total_rainfall}")
             
                 if predicted_value > MAX_REASONABLE_RAINFALL or predicted_value < 0:
                     print(f"Unreasonable predicted value for {date_str}: {predicted_value}, setting to 0")
