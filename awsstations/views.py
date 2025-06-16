@@ -14,6 +14,7 @@ from datetime import datetime
 from django.utils import timezone
 import pytz
 from collections import defaultdict
+from django.utils.timezone import make_aware
 
 
 class StationListView(APIView):
@@ -51,13 +52,14 @@ class StationDetailView(APIView):
 
             for i in range(4):
                 day = three_days_ago_ist + timedelta(days=i)
-                day_start_ist = ist.localize(datetime.combine(day, datetime.min.time()))
+                day_start_naive = datetime.combine(day, datetime.min.time())
+                day_start_ist = make_aware(day_start_naive, ist)
                 if day == today_ist:
-                    # For today, sum only up to now_time
                     day_end = now_time
                 else:
-                    # For previous days, sum full IST day
-                    day_end = ist.localize(datetime.combine(day, datetime.max.time()))
+                    day_end_naive = datetime.combine(day, datetime.max.time())
+                    day_end_ist = make_aware(day_end_naive, ist)
+                    day_end = day_end_ist
                 records = StationData.objects.filter(
                     station=station,
                     timestamp__gte=day_start_ist,
@@ -103,9 +105,6 @@ class StationDetailView(APIView):
             return Response({
                 'station': serializer,
                 'daily_data': update_daily_data,
-                # 'hrly_data': update_hrly_data,  # Your existing hourly data
-                # 'seasonal_data': seasonaldata,  # Your existing seasonal data
-                # 'mobile_daily_data': mobile_daily_data  # Your existing mobile data
             })
 
         except AWSStation.DoesNotExist:
