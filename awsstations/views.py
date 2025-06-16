@@ -45,25 +45,6 @@ class StationDetailView(APIView):
             def get_rainfall_day_start(date):
                 return make_aware(datetime.combine(date - timedelta(days=1), datetime.strptime('23:30', '%H:%M').time()))
             
-            # Get the start of the rainfall day for three days ago
-            start_time = get_rainfall_day_start(three_days_ago)
-            class StationDetailView(APIView):
-    def get(self, request, station_id):
-        now_time = timezone.now()
-        today = now_time.date()
-        
-        try:
-            # Fetch station
-            station = AWSStation.objects.get(station_id=station_id)
-            serializer = AWSStationSerializer(station).data
-
-            # Get observed data for past 3 days
-            three_days_ago = today - timedelta(days=3)
-            
-            # Create a function to get the start of the rainfall day (11:30 PM previous day)
-            def get_rainfall_day_start(date):
-                return make_aware(datetime.combine(date - timedelta(days=1), datetime.strptime('23:30', '%H:%M').time()))
-            
             # Create a function to get the end of the rainfall day (11:30 PM current day)
             def get_rainfall_day_end(date):
                 return make_aware(datetime.combine(date, datetime.strptime('23:30', '%H:%M').time()))
