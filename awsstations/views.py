@@ -151,10 +151,8 @@ class DailyStationDataListView(APIView):
         serializer = DailyStationDataSerializer(queryset, many=True)
         return Response(serializer.data)
 
-class QuarterlyAWSDataCreateView(APIView):
-    def post(self, request):
-        serializer = QuarterlyAWSDataSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+class QuarterlyAWSDataListView(APIView):
+    def get(self, request, station_id):
+        queryset = QuarterlyAWSData.objects.filter(station__station_id=station_id)
+        serializer = QuarterlyAWSDataSerializer(queryset, many=True)
+        return Response(serializer.data)
