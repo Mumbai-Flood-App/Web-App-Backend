@@ -13,6 +13,7 @@ from django.utils.timezone import make_aware
 from datetime import datetime
 from django.utils import timezone
 import pytz
+from collections import defaultdict
 
 
 class StationListView(APIView):
@@ -30,53 +31,39 @@ class TrainStationListView(APIView):
         # return Response({ 'message': 'Under Construction' }, status=status.HTTP_501_NOT_IMPLEMENTED)
 
 class StationDetailView(APIView):
-    print("=== STATION DETAIL VIEW CODE IS LIVE ===")
     def get(self, request, station_id):
+        print("=== STATION DETAIL VIEW CODE IS LIVE ===")
         now_time = timezone.now()
-        today = now_time.date()
-        
+        ist = pytz.timezone('Asia/Kolkata')
+        now_ist = now_time.astimezone(ist)
+        today_ist = now_ist.date()
+        three_days_ago_ist = today_ist - timedelta(days=3)
+        start_dt_ist = ist.localize(datetime.combine(three_days_ago_ist, datetime.min.time()))
+        end_dt_ist = ist.localize(datetime.combine(today_ist, datetime.max.time()))
+
         try:
             # Fetch station
             station = AWSStation.objects.get(station_id=station_id)
             serializer = AWSStationSerializer(station).data
 
-            ist = pytz.timezone('Asia/Kolkata')
-            today_ist = now_time.astimezone(ist).date()
-            three_days_ago_ist = today_ist - timedelta(days=3)
-            start_dt_ist = ist.localize(datetime.combine(three_days_ago_ist, datetime.min.time()))
-            end_dt_ist = ist.localize(datetime.combine(today_ist, datetime.max.time()))
-            
-            daily_data = (
-                StationData.objects
-                .filter(
-                    station=station,
-                    timestamp__gte=start_dt_ist,
-                    timestamp__lte=now_time
-                )
-                .annotate(date=TruncDate('timestamp', tzinfo=ist))
-                .values('date')
-                .annotate(total_rainfall=Sum('rainfall'))
-                .order_by('date')
-            )
-            print(daily_data.query)
+            # Fetch all records in the IST range
+            records = StationData.objects.filter(
+                station=station,
+                timestamp__gte=start_dt_ist,
+                timestamp__lte=end_dt_ist
+            ).order_by('timestamp')
+
+            # Aggregate in Python by IST date
+            daily_totals = defaultdict(float)
+            for rec in records:
+                rec_ist = rec.timestamp.astimezone(ist)
+                date_str = rec_ist.strftime('%Y-%m-%d')
+                daily_totals[date_str] += rec.rainfall
 
             # Debug: print daily sums
-            print("=== DEBUG: StationDetailView (daily_data) ===")
-            for data in daily_data:
-                print(f"Date: {data['date']}, Total rainfall: {data['total_rainfall']}")
-            print("=== END DEBUG ===")
-
-            # Debug: print all today's records
-            today_start = now_time.replace(hour=0, minute=0, second=0, microsecond=0)
-            todays_records = StationData.objects.filter(
-                station=station,
-                timestamp__gte=today_start,
-                timestamp__lte=now_time
-            ).order_by('timestamp')
-            print("=== DEBUG: All records for today in StationDetailView ===")
-            for rec in todays_records:
-                print(f"{rec.timestamp}: {rec.rainfall}")
-            print(f"Sum: {sum(rec.rainfall for rec in todays_records)}")
+            print("=== DEBUG: StationDetailView (daily_totals) ===")
+            for date_str in sorted(daily_totals.keys()):
+                print(f"Date: {date_str}, Total rainfall: {daily_totals[date_str]}")
             print("=== END DEBUG ===")
 
             # Get latest predictions
@@ -85,36 +72,35 @@ class StationDetailView(APIView):
                 timestamp__isnull=False
             ).latest('timestamp')
 
-            # Process daily data
+            # Build daily_data for the last 4 days
             update_daily_data = []
-            
             MAX_REASONABLE_RAINFALL = 1000  # mm, adjust as needed
 
-            for data in daily_data:
-                pred_date = data['date'] - timedelta(days=1)
+            for i in range(4):
+                day = three_days_ago_ist + timedelta(days=i)
+                date_str = day.strftime('%Y-%m-%d')
+                observed = daily_totals.get(date_str, 0)
+
+                # Get prediction for this day
+                pred_date = day - timedelta(days=1)
                 past_prediction = DaywisePrediction.objects.filter(
                     station=station,
                     timestamp__date=pred_date
-                ).order_by('-timestamp').first()  # Get the latest prediction from yesterday
-            
+                ).order_by('-timestamp').first()
                 predicted_value = past_prediction.day1_rainfall if past_prediction else 0
-            
-                # Debug print
-                print(f"Observed date: {data['date']}, pred_date: {pred_date}, predicted_value: {predicted_value}")
-            
                 if predicted_value > MAX_REASONABLE_RAINFALL or predicted_value < 0:
-                    print(f"Unreasonable predicted value for {data['date']}: {predicted_value}, setting to 0")
                     predicted_value = 0
-            
+
                 update_daily_data.append({
-                    'date': str(data['date']),
-                    'observed': data['total_rainfall'],
+                    'date': date_str,
+                    'observed': observed,
                     'predicted': predicted_value,
                     'is_forecasted': False
                 })
-            # Add future predictions
-            for i in range(1, 4):  # Next 3 days
-                future_date = today + timedelta(days=i)
+
+            # Add future predictions (next 3 days)
+            for i in range(1, 4):
+                future_date = today_ist + timedelta(days=i)
                 update_daily_data.append({
                     'date': future_date.strftime('%Y-%m-%d'),
                     'observed': 0,
@@ -128,9 +114,9 @@ class StationDetailView(APIView):
             return Response({
                 'station': serializer,
                 'daily_data': update_daily_data,
-                #'hrly_data': update_hrly_data,  # Your existing hourly data
-                #'seasonal_data': seasonaldata,  # Your existing seasonal data
-                #'mobile_daily_data': mobile_daily_data  # Your existing mobile data
+                # 'hrly_data': update_hrly_data,  # Your existing hourly data
+                # 'seasonal_data': seasonaldata,  # Your existing seasonal data
+                # 'mobile_daily_data': mobile_daily_data  # Your existing mobile data
             })
 
         except AWSStation.DoesNotExist:
