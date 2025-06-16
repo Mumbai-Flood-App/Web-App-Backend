@@ -38,20 +38,30 @@ class StationDetailView(APIView):
             station = AWSStation.objects.get(station_id=station_id)
             serializer = AWSStationSerializer(station).data
 
-            # Get observed data for past 3 days
+            # Get observed data for past 3 days with 15-minute intervals
             three_days_ago = today - timedelta(days=3)
-            daily_data = (
+            raw_data = (
                 StationData.objects
                 .filter(
                     station=station, 
                     timestamp__gte=three_days_ago, 
                     timestamp__lte=now_time
                 )
-                .annotate(date=TruncDate('timestamp'))
-                .values('date')
-                .annotate(total_rainfall=Sum('rainfall'))
-                .order_by('date')
+                .annotate(
+                    date=TruncDate('timestamp'),
+                    interval=TruncMinute('timestamp', interval=15)
+                )
+                .values('date', 'interval', 'rainfall')
+                .order_by('date', 'interval')
             )
+
+            # Manually aggregate 15-minute data into daily sums
+            daily_sums = {}
+            for data in raw_data:
+                date_str = str(data['date'])
+                if date_str not in daily_sums:
+                    daily_sums[date_str] = 0
+                daily_sums[date_str] += data['rainfall']
 
             # Get latest predictions
             pred_daily_data = DaywisePrediction.objects.filter(
@@ -64,28 +74,30 @@ class StationDetailView(APIView):
             
             MAX_REASONABLE_RAINFALL = 1000  # mm, adjust as needed
 
-            for data in daily_data:
-                pred_date = data['date'] - timedelta(days=1)
+            # Add observed data with past predictions
+            for date_str, total_rainfall in daily_sums.items():
+                pred_date = datetime.strptime(date_str, '%Y-%m-%d').date() - timedelta(days=1)
                 past_prediction = DaywisePrediction.objects.filter(
                     station=station,
                     timestamp__date=pred_date
-                ).order_by('-timestamp').first()  # Get the latest prediction from yesterday
+                ).order_by('-timestamp').first()
             
                 predicted_value = past_prediction.day1_rainfall if past_prediction else 0
             
                 # Debug print
-                print(f"Observed date: {data['date']}, pred_date: {pred_date}, predicted_value: {predicted_value}")
+                print(f"Observed date: {date_str}, pred_date: {pred_date}, predicted_value: {predicted_value}")
             
                 if predicted_value > MAX_REASONABLE_RAINFALL or predicted_value < 0:
-                    print(f"Unreasonable predicted value for {data['date']}: {predicted_value}, setting to 0")
+                    print(f"Unreasonable predicted value for {date_str}: {predicted_value}, setting to 0")
                     predicted_value = 0
             
                 update_daily_data.append({
-                    'date': str(data['date']),
-                    'observed': data['total_rainfall'],
+                    'date': date_str,
+                    'observed': total_rainfall,
                     'predicted': predicted_value,
                     'is_forecasted': False
                 })
+
             # Add future predictions
             for i in range(1, 4):  # Next 3 days
                 future_date = today + timedelta(days=i)
