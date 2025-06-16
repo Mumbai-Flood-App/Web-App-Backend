@@ -55,12 +55,28 @@ class StationDetailView(APIView):
                 day_start = get_rainfall_day_start(current_date)
                 day_end = day_start + timedelta(days=1)
                 
-                # Get rainfall for this period
-                rainfall = StationData.objects.filter(
+                # Get all records for this period for debugging
+                period_records = StationData.objects.filter(
                     station=station,
                     timestamp__gte=day_start,
                     timestamp__lt=day_end
-                ).aggregate(total_rainfall=Sum('rainfall'))['total_rainfall'] or 0
+                ).order_by('timestamp')
+                
+                # Debug logging
+                print(f"\nAnalyzing period for {current_date}:")
+                print(f"Start time: {day_start}")
+                print(f"End time: {day_end}")
+                print(f"Number of records found: {period_records.count()}")
+                
+                # Calculate total rainfall
+                rainfall = period_records.aggregate(total_rainfall=Sum('rainfall'))['total_rainfall'] or 0
+                
+                # Debug logging for records
+                if period_records.exists():
+                    first_record = period_records.first()
+                    last_record = period_records.last()
+                    print(f"First record: {first_record.timestamp} - {first_record.rainfall}mm")
+                    print(f"Last record: {last_record.timestamp} - {last_record.rainfall}mm")
                 
                 daily_data.append({
                     'date': str(current_date),
@@ -93,6 +109,11 @@ class StationDetailView(APIView):
                     print(f"Unreasonable predicted value for {data['date']}: {predicted_value}, setting to 0")
                     predicted_value = 0
             
+                # Debug logging for daily totals
+                print(f"\nDaily total for {data['date']}:")
+                print(f"Observed rainfall: {data['total_rainfall']}mm")
+                print(f"Predicted rainfall: {predicted_value}mm")
+            
                 update_daily_data.append({
                     'date': str(data['date']),
                     'observed': data['total_rainfall'],
@@ -103,15 +124,29 @@ class StationDetailView(APIView):
             # Add future predictions
             for i in range(1, 4):  # Next 3 days
                 future_date = today + timedelta(days=i)
+                predicted_value = getattr(pred_daily_data, f'day{i}_rainfall', 0)
+                
+                # Debug logging for future predictions
+                print(f"\nFuture prediction for {future_date}:")
+                print(f"Predicted rainfall: {predicted_value}mm")
+                
                 update_daily_data.append({
                     'date': future_date.strftime('%Y-%m-%d'),
                     'observed': 0,
-                    'predicted': getattr(pred_daily_data, f'day{i}_rainfall', 0),
+                    'predicted': predicted_value,
                     'is_forecasted': True
                 })
 
             # Sort by date to ensure correct order
             update_daily_data.sort(key=lambda x: x['date'])
+
+            # Final debug logging
+            print("\nFinal daily data:")
+            for data in update_daily_data:
+                print(f"Date: {data['date']}")
+                print(f"Observed: {data['observed']}mm")
+                print(f"Predicted: {data['predicted']}mm")
+                print(f"Is forecasted: {data['is_forecasted']}")
 
             return Response({
                 'station': serializer,
@@ -124,6 +159,7 @@ class StationDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
+            print(f"Error in StationDetailView: {str(e)}")  # Additional error logging
             return Response(
                 {'error': str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
