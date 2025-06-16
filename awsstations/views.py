@@ -52,11 +52,16 @@ class StationDetailView(APIView):
             for i in range(4):
                 day = three_days_ago_ist + timedelta(days=i)
                 day_start_ist = ist.localize(datetime.combine(day, datetime.min.time()))
-                day_end_ist = ist.localize(datetime.combine(day, datetime.max.time()))
+                if day == today_ist:
+                    # For today, sum only up to now_time
+                    day_end = now_time
+                else:
+                    # For previous days, sum full IST day
+                    day_end = ist.localize(datetime.combine(day, datetime.max.time()))
                 records = StationData.objects.filter(
                     station=station,
                     timestamp__gte=day_start_ist,
-                    timestamp__lte=day_end_ist
+                    timestamp__lte=day_end
                 )
                 observed = sum(rec.rainfall for rec in records)
                 print(f"IST {day} rainfall sum: {observed}")
