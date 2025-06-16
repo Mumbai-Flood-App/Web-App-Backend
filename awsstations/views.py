@@ -59,11 +59,15 @@ class StationDetailView(APIView):
                     day_end_naive = datetime.combine(day, datetime.max.time())
                     day_end_ist = make_aware(day_end_naive, ist)
                     day_end = day_end_ist
+                print(f"IST {day} start: {day_start_ist} ({day_start_ist.tzinfo}), end: {day_end} ({day_end.tzinfo})")
                 records = StationData.objects.filter(
                     station=station,
                     timestamp__gte=day_start_ist,
                     timestamp__lte=day_end
                 )
+                for rec in records:
+                    print(f"Included: {rec.timestamp} | {rec.rainfall}")
+                print(f"Total records included for {day}: {records.count()}")
                 observed = sum(rec.rainfall for rec in records)
                 print(f"IST {day} rainfall sum: {observed}")
 
