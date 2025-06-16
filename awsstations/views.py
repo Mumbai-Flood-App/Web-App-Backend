@@ -40,18 +40,34 @@ class StationDetailView(APIView):
 
             # Get observed data for past 3 days
             three_days_ago = today - timedelta(days=3)
-            daily_data = (
-                StationData.objects
-                .filter(
-                    station=station, 
-                    timestamp__gte=three_days_ago, 
-                    timestamp__lte=now_time
-                )
-                .annotate(date=TruncDate('timestamp'))
-                .values('date')
-                .annotate(total_rainfall=Sum('rainfall'))
-                .order_by('date')
-            )
+            
+            # Create a function to get the start of the rainfall day (11:30 PM previous day)
+            def get_rainfall_day_start(date):
+                return make_aware(datetime.combine(date - timedelta(days=1), datetime.strptime('23:30', '%H:%M').time()))
+            
+            # Get the start of the rainfall day for three days ago
+            start_time = get_rainfall_day_start(three_days_ago)
+            
+            # Aggregate data by rainfall day (11:30 PM to 11:30 PM)
+            daily_data = []
+            current_date = three_days_ago
+            while current_date <= today:
+                day_start = get_rainfall_day_start(current_date)
+                day_end = day_start + timedelta(days=1)
+                
+                # Get rainfall for this period
+                rainfall = StationData.objects.filter(
+                    station=station,
+                    timestamp__gte=day_start,
+                    timestamp__lt=day_end
+                ).aggregate(total_rainfall=Sum('rainfall'))['total_rainfall'] or 0
+                
+                daily_data.append({
+                    'date': str(current_date),
+                    'total_rainfall': rainfall
+                })
+                
+                current_date += timedelta(days=1)
 
             # Get latest predictions
             pred_daily_data = DaywisePrediction.objects.filter(
@@ -65,16 +81,13 @@ class StationDetailView(APIView):
             MAX_REASONABLE_RAINFALL = 1000  # mm, adjust as needed
 
             for data in daily_data:
-                pred_date = data['date'] - timedelta(days=1)
+                pred_date = datetime.strptime(data['date'], '%Y-%m-%d').date() - timedelta(days=1)
                 past_prediction = DaywisePrediction.objects.filter(
                     station=station,
                     timestamp__date=pred_date
                 ).order_by('-timestamp').first()  # Get the latest prediction from yesterday
             
                 predicted_value = past_prediction.day1_rainfall if past_prediction else 0
-            
-                # Debug print
-                print(f"Observed date: {data['date']}, pred_date: {pred_date}, predicted_value: {predicted_value}")
             
                 if predicted_value > MAX_REASONABLE_RAINFALL or predicted_value < 0:
                     print(f"Unreasonable predicted value for {data['date']}: {predicted_value}, setting to 0")
@@ -86,6 +99,7 @@ class StationDetailView(APIView):
                     'predicted': predicted_value,
                     'is_forecasted': False
                 })
+
             # Add future predictions
             for i in range(1, 4):  # Next 3 days
                 future_date = today + timedelta(days=i)
@@ -102,9 +116,6 @@ class StationDetailView(APIView):
             return Response({
                 'station': serializer,
                 'daily_data': update_daily_data,
-                #'hrly_data': update_hrly_data,  # Your existing hourly data
-                #'seasonal_data': seasonaldata,  # Your existing seasonal data
-                #'mobile_daily_data': mobile_daily_data  # Your existing mobile data
             })
 
         except AWSStation.DoesNotExist:
