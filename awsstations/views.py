@@ -40,6 +40,24 @@ class StationDetailView(APIView):
 
             # Get observed data for past 3 days with 15-minute intervals
             three_days_ago = today - timedelta(days=3)
+            
+            # Debug: Get raw 15-minute data first
+            raw_15min_data = StationData.objects.filter(
+                station=station, 
+                timestamp__gte=three_days_ago, 
+                timestamp__lte=now_time
+            ).order_by('timestamp')
+            
+            # Debug: Manual calculation of daily sums
+            manual_daily_sums = {}
+            for data in raw_15min_data:
+                date_str = data.timestamp.strftime('%Y-%m-%d')
+                if date_str not in manual_daily_sums:
+                    manual_daily_sums[date_str] = 0
+                manual_daily_sums[date_str] += data.rainfall
+                print(f"DEBUG - Manual: Date {date_str}, Time {data.timestamp.strftime('%H:%M')}, Rainfall {data.rainfall}, Running total {manual_daily_sums[date_str]}")
+
+            # Database aggregation
             raw_data = (
                 StationData.objects
                 .filter(
@@ -54,6 +72,13 @@ class StationDetailView(APIView):
                 .annotate(total_rainfall=Sum('rainfall'))
                 .order_by('date')
             )
+
+            # Debug: Print database aggregation results
+            print("\nDEBUG - Database Aggregation Results:")
+            for data in raw_data:
+                date_str = data['date'].strftime('%Y-%m-%d')
+                print(f"Date: {date_str}, Total Rainfall: {data['total_rainfall']}")
+                print(f"Manual total for same date: {manual_daily_sums.get(date_str, 0)}")
 
             # Convert to dictionary for easier lookup
             daily_sums = {
@@ -87,6 +112,9 @@ class StationDetailView(APIView):
             
                 # Debug print
                 print(f"Observed date: {date_str}, pred_date: {pred_date}, predicted_value: {predicted_value}")
+                print(f"DEBUG - Final values for {date_str}:")
+                print(f"  Database total: {total_rainfall}")
+                print(f"  Manual total: {manual_daily_sums.get(date_str, 0)}")
             
                 if predicted_value > MAX_REASONABLE_RAINFALL or predicted_value < 0:
                     print(f"Unreasonable predicted value for {date_str}: {predicted_value}, setting to 0")
