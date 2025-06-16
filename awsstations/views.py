@@ -31,6 +31,7 @@ class TrainStationListView(APIView):
         # return Response({ 'message': 'Under Construction' }, status=status.HTTP_501_NOT_IMPLEMENTED)
 
 class StationDetailView(APIView):
+    print('=== AWSSTATIONS StationDetailView IS RUNNING ===')
     def get(self, request, station_id):
         print("=== STATION DETAIL VIEW CODE IS LIVE ===")
         now_time = timezone.now()
