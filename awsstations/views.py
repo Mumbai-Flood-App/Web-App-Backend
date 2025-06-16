@@ -48,21 +48,18 @@ class StationDetailView(APIView):
                     timestamp__lte=now_time
                 )
                 .annotate(
-                    date=TruncDate('timestamp'),
-                    interval=TruncMinute('timestamp', interval=15)
+                    date=TruncDate('timestamp')
                 )
-                .values('date', 'interval', 'rainfall')
-                .order_by('date', 'interval')
+                .values('date')
+                .annotate(total_rainfall=Sum('rainfall'))
+                .order_by('date')
             )
 
-            # Manually aggregate 15-minute data into daily sums
-            daily_sums = {}
-            for data in raw_data:
-                # Convert naive date to timezone-aware datetime
-                date_str = data['date'].strftime('%Y-%m-%d')
-                if date_str not in daily_sums:
-                    daily_sums[date_str] = 0
-                daily_sums[date_str] += data['rainfall']
+            # Convert to dictionary for easier lookup
+            daily_sums = {
+                data['date'].strftime('%Y-%m-%d'): data['total_rainfall']
+                for data in raw_data
+            }
 
             # Get latest predictions
             pred_daily_data = DaywisePrediction.objects.filter(
@@ -117,10 +114,7 @@ class StationDetailView(APIView):
 
             return Response({
                 'station': serializer,
-                'daily_data': update_daily_data,
-                #'hrly_data': update_hrly_data,  # Your existing hourly data
-                #'seasonal_data': seasonaldata,  # Your existing seasonal data
-                #'mobile_daily_data': mobile_daily_data  # Your existing mobile data
+                'daily_data': update_daily_data
             })
 
         except AWSStation.DoesNotExist:
