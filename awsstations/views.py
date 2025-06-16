@@ -43,10 +43,10 @@ class StationDetailView(APIView):
             
             # Create a function to get the start of the rainfall day (11:30 PM previous day)
             def get_rainfall_day_start(date):
-                return make_aware(datetime.combine(date - timedelta(days=1), datetime.strptime('23:30', '%H:%M').time()))
-            
-            # Get the start of the rainfall day for three days ago
-            start_time = get_rainfall_day_start(three_days_ago)
+                # Convert to IST
+                ist = pytz.timezone('Asia/Kolkata')
+                start_time = datetime.combine(date - timedelta(days=1), datetime.strptime('23:30', '%H:%M').time())
+                return ist.localize(start_time)
             
             # Aggregate data by rainfall day (11:30 PM to 11:30 PM)
             daily_data = []
@@ -55,28 +55,27 @@ class StationDetailView(APIView):
                 day_start = get_rainfall_day_start(current_date)
                 day_end = day_start + timedelta(days=1)
                 
-                # Get all records for this period for debugging
+                # Get all records for this period
                 period_records = StationData.objects.filter(
                     station=station,
-                    timestamp__gte=day_start,
-                    timestamp__lt=day_end
+                    timestamp__gte=day_start.astimezone(pytz.UTC),  # Convert to UTC for database query
+                    timestamp__lt=day_end.astimezone(pytz.UTC)      # Convert to UTC for database query
                 ).order_by('timestamp')
                 
                 # Debug logging
                 print(f"\nAnalyzing period for {current_date}:")
-                print(f"Start time: {day_start}")
-                print(f"End time: {day_end}")
+                print(f"Start time (IST): {day_start}")
+                print(f"End time (IST): {day_end}")
                 print(f"Number of records found: {period_records.count()}")
                 
-                # Calculate total rainfall
-                rainfall = period_records.aggregate(total_rainfall=Sum('rainfall'))['total_rainfall'] or 0
-                
-                # Debug logging for records
                 if period_records.exists():
                     first_record = period_records.first()
                     last_record = period_records.last()
-                    print(f"First record: {first_record.timestamp} - {first_record.rainfall}mm")
-                    print(f"Last record: {last_record.timestamp} - {last_record.rainfall}mm")
+                    print(f"First record (UTC): {first_record.timestamp} - {first_record.rainfall}mm")
+                    print(f"Last record (UTC): {last_record.timestamp} - {last_record.rainfall}mm")
+                
+                # Calculate total rainfall
+                rainfall = period_records.aggregate(total_rainfall=Sum('rainfall'))['total_rainfall'] or 0
                 
                 daily_data.append({
                     'date': str(current_date),
@@ -85,6 +84,7 @@ class StationDetailView(APIView):
                 
                 current_date += timedelta(days=1)
 
+            # Rest of the code remains the same...
             # Get latest predictions
             pred_daily_data = DaywisePrediction.objects.filter(
                 station=station, 
@@ -101,18 +101,13 @@ class StationDetailView(APIView):
                 past_prediction = DaywisePrediction.objects.filter(
                     station=station,
                     timestamp__date=pred_date
-                ).order_by('-timestamp').first()  # Get the latest prediction from yesterday
+                ).order_by('-timestamp').first()
             
                 predicted_value = past_prediction.day1_rainfall if past_prediction else 0
             
                 if predicted_value > MAX_REASONABLE_RAINFALL or predicted_value < 0:
                     print(f"Unreasonable predicted value for {data['date']}: {predicted_value}, setting to 0")
                     predicted_value = 0
-            
-                # Debug logging for daily totals
-                print(f"\nDaily total for {data['date']}:")
-                print(f"Observed rainfall: {data['total_rainfall']}mm")
-                print(f"Predicted rainfall: {predicted_value}mm")
             
                 update_daily_data.append({
                     'date': str(data['date']),
@@ -124,29 +119,15 @@ class StationDetailView(APIView):
             # Add future predictions
             for i in range(1, 4):  # Next 3 days
                 future_date = today + timedelta(days=i)
-                predicted_value = getattr(pred_daily_data, f'day{i}_rainfall', 0)
-                
-                # Debug logging for future predictions
-                print(f"\nFuture prediction for {future_date}:")
-                print(f"Predicted rainfall: {predicted_value}mm")
-                
                 update_daily_data.append({
                     'date': future_date.strftime('%Y-%m-%d'),
                     'observed': 0,
-                    'predicted': predicted_value,
+                    'predicted': getattr(pred_daily_data, f'day{i}_rainfall', 0),
                     'is_forecasted': True
                 })
 
             # Sort by date to ensure correct order
             update_daily_data.sort(key=lambda x: x['date'])
-
-            # Final debug logging
-            print("\nFinal daily data:")
-            for data in update_daily_data:
-                print(f"Date: {data['date']}")
-                print(f"Observed: {data['observed']}mm")
-                print(f"Predicted: {data['predicted']}mm")
-                print(f"Is forecasted: {data['is_forecasted']}")
 
             return Response({
                 'station': serializer,
@@ -159,7 +140,7 @@ class StationDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
-            print(f"Error in StationDetailView: {str(e)}")  # Additional error logging
+            print(f"Error in StationDetailView: {str(e)}")
             return Response(
                 {'error': str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
