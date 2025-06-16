@@ -12,6 +12,7 @@ import pandas as pd
 from django.utils.timezone import make_aware
 from datetime import datetime
 from django.utils import timezone
+import pytz
 
 
 class StationListView(APIView):
@@ -39,16 +40,21 @@ class StationDetailView(APIView):
             station = AWSStation.objects.get(station_id=station_id)
             serializer = AWSStationSerializer(station).data
 
-            # Get observed data for past 3 days
-            three_days_ago = today - timedelta(days=3)
+            ist = pytz.timezone('Asia/Kolkata')
+            today_ist = now_time.astimezone(ist).date()
+            three_days_ago_ist = today_ist - timedelta(days=3)
+            start_dt_ist = ist.localize(datetime.combine(three_days_ago_ist, datetime.min.time()))
+            end_dt_ist = ist.localize(datetime.combine(today_ist, datetime.max.time()))
+            
             daily_data = (
                 StationData.objects
                 .filter(
-                    station=station, 
-                    timestamp__gte=three_days_ago, 
+                    station=station,
+                    timestamp__gte=start_dt_ist,
                     timestamp__lte=now_time
                 )
-                .values(date=TruncDate('timestamp'))
+                .annotate(date=TruncDate('timestamp', tzinfo=ist))
+                .values('date')
                 .annotate(total_rainfall=Sum('rainfall'))
                 .order_by('date')
             )
