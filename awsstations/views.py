@@ -1,7 +1,7 @@
 
 # Create your views here.
-from .models import AWSStation, StationData, DaywisePrediction, HourlyPrediction, TrainStation
-from .serializers import AWSStationSerializer, TrainStationSerializer ,StationDataSerializer, DaywisePredictionSerializer, HourlyPredictionSerializer
+from .models import AWSStation, StationData, DaywisePrediction, HourlyPrediction, TrainStation, DailyStationData
+from .serializers import AWSStationSerializer, TrainStationSerializer ,StationDataSerializer, DaywisePredictionSerializer, HourlyPredictionSerializer, DailyStationDataSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models.functions import TruncDate, TruncHour
@@ -144,3 +144,9 @@ class StationRawDataView(APIView):
             
         except AWSStation.DoesNotExist:
             return Response({'error': 'Station not found'}, status=status.HTTP_404_NOT_FOUND)
+
+class DailyStationDataListView(APIView):
+    def get(self, request):
+        queryset = DailyStationData.objects.all()
+        serializer = DailyStationDataSerializer(queryset, many=True)
+        return Response(serializer.data)
