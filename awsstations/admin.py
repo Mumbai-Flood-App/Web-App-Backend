@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import AWSStation, DaywisePrediction, TrainStation, StationData, HourlyPrediction, DailyStationData
+from .models import AWSStation, DaywisePrediction, TrainStation, StationData, HourlyPrediction, DailyStationData, QuarterlyAWSData
 
 
 
@@ -72,9 +72,14 @@ class DailyStationDataAdmin(admin.ModelAdmin):
     list_display = ('station', 'date', 'total_rainfall')
     list_filter = ('station', 'date')
 
+class QuarterlyAWSDataAdmin(admin.ModelAdmin):
+    list_display = ('station', 'timestamp', 'rainfall')
+    list_filter = ('station', 'timestamp')
+
 admin.site.register(AWSStation, AWSStationAdmin)
 admin.site.register(DaywisePrediction, DaywisePredictionAdmin)
 admin.site.register(TrainStation, TrainStationAdmin)
 admin.site.register(StationData, StationDataAdmin)
 admin.site.register(HourlyPrediction, HourlyPredictionAdmin)
 admin.site.register(DailyStationData, DailyStationDataAdmin)
+admin.site.register(QuarterlyAWSData, QuarterlyAWSDataAdmin)
