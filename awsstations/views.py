@@ -14,8 +14,6 @@ from datetime import datetime
 from django.utils import timezone
 
 
-
-
 class StationListView(APIView):
     def get(self, request):
         stations = AWSStation.objects.all().order_by('name')
@@ -42,8 +40,6 @@ class StationDetailView(APIView):
 
             # Get observed data for past 3 days
             three_days_ago = today - timedelta(days=3)
-            
-            # Get daily data using TruncDate
             daily_data = (
                 StationData.objects
                 .filter(
@@ -77,6 +73,9 @@ class StationDetailView(APIView):
             
                 predicted_value = past_prediction.day1_rainfall if past_prediction else 0
             
+                # Debug print
+                print(f"Observed date: {data['date']}, pred_date: {pred_date}, predicted_value: {predicted_value}")
+            
                 if predicted_value > MAX_REASONABLE_RAINFALL or predicted_value < 0:
                     print(f"Unreasonable predicted value for {data['date']}: {predicted_value}, setting to 0")
                     predicted_value = 0
@@ -87,7 +86,6 @@ class StationDetailView(APIView):
                     'predicted': predicted_value,
                     'is_forecasted': False
                 })
-
             # Add future predictions
             for i in range(1, 4):  # Next 3 days
                 future_date = today + timedelta(days=i)
@@ -104,6 +102,9 @@ class StationDetailView(APIView):
             return Response({
                 'station': serializer,
                 'daily_data': update_daily_data,
+                #'hrly_data': update_hrly_data,  # Your existing hourly data
+                #'seasonal_data': seasonaldata,  # Your existing seasonal data
+                #'mobile_daily_data': mobile_daily_data  # Your existing mobile data
             })
 
         except AWSStation.DoesNotExist:
@@ -112,7 +113,6 @@ class StationDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
-            print(f"Error in StationDetailView: {str(e)}")
             return Response(
                 {'error': str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
