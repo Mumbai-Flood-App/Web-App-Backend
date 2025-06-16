@@ -38,48 +38,27 @@ class StationDetailView(APIView):
         now_ist = now_time.astimezone(ist)
         today_ist = now_ist.date()
         three_days_ago_ist = today_ist - timedelta(days=3)
-        start_dt_ist = ist.localize(datetime.combine(three_days_ago_ist, datetime.min.time()))
-        end_dt_ist = ist.localize(datetime.combine(today_ist, datetime.max.time()))
 
         try:
             # Fetch station
             station = AWSStation.objects.get(station_id=station_id)
             serializer = AWSStationSerializer(station).data
 
-            # Fetch all records in the IST range
-            records = StationData.objects.filter(
-                station=station,
-                timestamp__gte=start_dt_ist,
-                timestamp__lte=end_dt_ist
-            ).order_by('timestamp')
-
-            # Aggregate in Python by IST date
-            daily_totals = defaultdict(float)
-            for rec in records:
-                rec_ist = rec.timestamp.astimezone(ist)
-                date_str = rec_ist.strftime('%Y-%m-%d')
-                daily_totals[date_str] += rec.rainfall
-
-            # Debug: print daily sums
-            print("=== DEBUG: StationDetailView (daily_totals) ===")
-            for date_str in sorted(daily_totals.keys()):
-                print(f"Date: {date_str}, Total rainfall: {daily_totals[date_str]}")
-            print("=== END DEBUG ===")
-
-            # Get latest predictions
-            pred_daily_data = DaywisePrediction.objects.filter(
-                station=station, 
-                timestamp__isnull=False
-            ).latest('timestamp')
-
-            # Build daily_data for the last 4 days
+            # Aggregate daily rainfall for the last 4 IST days
             update_daily_data = []
             MAX_REASONABLE_RAINFALL = 1000  # mm, adjust as needed
 
             for i in range(4):
                 day = three_days_ago_ist + timedelta(days=i)
-                date_str = day.strftime('%Y-%m-%d')
-                observed = daily_totals.get(date_str, 0)
+                day_start_ist = ist.localize(datetime.combine(day, datetime.min.time()))
+                day_end_ist = ist.localize(datetime.combine(day, datetime.max.time()))
+                records = StationData.objects.filter(
+                    station=station,
+                    timestamp__gte=day_start_ist,
+                    timestamp__lte=day_end_ist
+                )
+                observed = sum(rec.rainfall for rec in records)
+                print(f"IST {day} rainfall sum: {observed}")
 
                 # Get prediction for this day
                 pred_date = day - timedelta(days=1)
@@ -92,13 +71,17 @@ class StationDetailView(APIView):
                     predicted_value = 0
 
                 update_daily_data.append({
-                    'date': date_str,
+                    'date': day.strftime('%Y-%m-%d'),
                     'observed': observed,
                     'predicted': predicted_value,
                     'is_forecasted': False
                 })
 
-            # Add future predictions (next 3 days)
+            # Get latest predictions for future days
+            pred_daily_data = DaywisePrediction.objects.filter(
+                station=station, 
+                timestamp__isnull=False
+            ).latest('timestamp')
             for i in range(1, 4):
                 future_date = today_ist + timedelta(days=i)
                 update_daily_data.append({
