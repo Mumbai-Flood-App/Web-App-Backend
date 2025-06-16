@@ -12,6 +12,8 @@ import pandas as pd
 from django.utils.timezone import make_aware
 from datetime import datetime
 from django.utils import timezone
+import logging
+
 
 
 class StationListView(APIView):
@@ -28,6 +30,7 @@ class TrainStationListView(APIView):
         return Response(serializer.data)
         # return Response({ 'message': 'Under Construction' }, status=status.HTTP_501_NOT_IMPLEMENTED)
 
+logger = logging.getLogger(__name__)
 class StationDetailView(APIView):
     def get(self, request, station_id):
         now_time = timezone.now()
