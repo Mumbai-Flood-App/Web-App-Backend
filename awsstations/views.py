@@ -47,8 +47,7 @@ class StationDetailView(APIView):
                     timestamp__gte=three_days_ago, 
                     timestamp__lte=now_time
                 )
-                .annotate(date=TruncDate('timestamp'))
-                .values('date')
+                .values(date=TruncDate('timestamp'))
                 .annotate(total_rainfall=Sum('rainfall'))
                 .order_by('date')
             )
