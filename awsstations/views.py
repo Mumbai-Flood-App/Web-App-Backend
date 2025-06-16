@@ -53,6 +53,25 @@ class StationDetailView(APIView):
                 .order_by('date')
             )
 
+            # Debug: print daily sums
+            print("=== DEBUG: StationDetailView (daily_data) ===")
+            for data in daily_data:
+                print(f"Date: {data['date']}, Total rainfall: {data['total_rainfall']}")
+            print("=== END DEBUG ===")
+
+            # Debug: print all today's records
+            today_start = now_time.replace(hour=0, minute=0, second=0, microsecond=0)
+            todays_records = StationData.objects.filter(
+                station=station,
+                timestamp__gte=today_start,
+                timestamp__lte=now_time
+            ).order_by('timestamp')
+            print("=== DEBUG: All records for today in StationDetailView ===")
+            for rec in todays_records:
+                print(f"{rec.timestamp}: {rec.rainfall}")
+            print(f"Sum: {sum(rec.rainfall for rec in todays_records)}")
+            print("=== END DEBUG ===")
+
             # Get latest predictions
             pred_daily_data = DaywisePrediction.objects.filter(
                 station=station, 
@@ -117,6 +136,7 @@ class StationDetailView(APIView):
                 {'error': str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
 class StationRawDataView(APIView):
     def get(self, request, station_id):
         try:
@@ -132,6 +152,17 @@ class StationRawDataView(APIView):
                 timestamp__lte=now_time
             ).order_by('timestamp')
             
+            # Debug: print all records and sum
+            print("=== DEBUG: StationRawDataView ===")
+            print(f"Station: {station.station_id}, Date: {today_start.date()} to {now_time}")
+            print(f"Total records: {raw_data.count()}")
+            total_rainfall = 0
+            for record in raw_data:
+                print(f"{record.timestamp} | {record.rainfall}")
+                total_rainfall += record.rainfall
+            print(f"Sum of rainfall: {total_rainfall}")
+            print("=== END DEBUG ===")
+
             formatted_data = [
                 {
                     'timestamp': record.timestamp.isoformat(),
@@ -143,4 +174,4 @@ class StationRawDataView(APIView):
             return Response(formatted_data)
             
         except AWSStation.DoesNotExist:
-            return Response({'error': 'Station not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Station not found'}, status=status.HTTP_404_NOT_FOUND) 
