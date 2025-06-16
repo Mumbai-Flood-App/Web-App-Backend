@@ -144,3 +144,16 @@ class Check(APIView):
                 )
                 print(station.name, (timezone.now() - timedelta(days=1)).date(), d['hour'].time(), d['total_rainfall'])
         return JsonResponse({'status': 'success'})
+
+class QuarterlyAWSDataListView(APIView):
+    def post(self, request):
+        try:
+            station = AWSStation.objects.get(station_id=request.data['station'])
+            QuarterlyAWSData.objects.create(
+                station=station,
+                timestamp=request.data['timestamp'],  # Should be ISO string or datetime
+                rainfall=request.data['rainfall']
+            )
+            return Response({'status': 'success'})
+        except Exception as e:
+            return Response({'status': 'error', 'message': str(e)}, status=400)
