@@ -60,4 +60,12 @@ class DailyStationData(models.Model):
 
     def __str__(self):
         return f"{self.station.name} - {self.date} - {self.total_rainfall}"
+
+class QuarterlyAWSData(models.Model):
+    station = models.ForeignKey('AWSStation', on_delete=models.CASCADE)
+    timestamp = models.DateTimeField()  # Stores both date and time (15-min interval)
+    rainfall = models.FloatField()
+
+    def __str__(self):
+        return f"{self.station.name} - {self.timestamp} - {self.rainfall}"
     
