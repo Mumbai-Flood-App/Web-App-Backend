@@ -4,7 +4,7 @@ from .models import AWSStation, StationData, DaywisePrediction, HourlyPrediction
 from .serializers import AWSStationSerializer, TrainStationSerializer ,StationDataSerializer, DaywisePredictionSerializer, HourlyPredictionSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.db.models.functions import TruncDate, TruncHour
+from django.db.models.functions import TruncDate, TruncHour, TruncMinute
 from django.db.models import Sum
 from rest_framework import status 
 from django.utils.timezone import now, timedelta
