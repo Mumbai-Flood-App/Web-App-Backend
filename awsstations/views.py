@@ -52,6 +52,8 @@ class StationDetailView(APIView):
             # Get the start of the rainfall day for three days ago
             start_time = get_rainfall_day_start(three_days_ago)
             
+            logger.info(f"Fetching data from {start_time} to {now_time}")
+            
             # Get daily data using TruncDate for initial data
             daily_data = []
             current_date = three_days_ago
@@ -66,6 +68,9 @@ class StationDetailView(APIView):
                     timestamp__gte=day_start,
                     timestamp__lt=day_end
                 ).aggregate(total_rainfall=Sum('rainfall'))['total_rainfall'] or 0
+                
+                # Log the data for debugging
+                logger.info(f"Date: {current_date}, Start: {day_start}, End: {day_end}, Rainfall: {rainfall}")
                 
                 daily_data.append({
                     'date': str(current_date),
@@ -95,7 +100,7 @@ class StationDetailView(APIView):
                 predicted_value = past_prediction.day1_rainfall if past_prediction else 0
             
                 if predicted_value > MAX_REASONABLE_RAINFALL or predicted_value < 0:
-                    print(f"Unreasonable predicted value for {data['date']}: {predicted_value}, setting to 0")
+                    logger.warning(f"Unreasonable predicted value for {data['date']}: {predicted_value}, setting to 0")
                     predicted_value = 0
             
                 update_daily_data.append({
@@ -118,18 +123,24 @@ class StationDetailView(APIView):
             # Sort by date to ensure correct order
             update_daily_data.sort(key=lambda x: x['date'])
 
+            # Log final data for debugging
+            logger.info("Final data being sent to frontend:")
+            for data in update_daily_data:
+                logger.info(f"Date: {data['date']}, Observed: {data['observed']}, Predicted: {data['predicted']}")
+
             return Response({
                 'station': serializer,
                 'daily_data': update_daily_data,
             })
 
         except AWSStation.DoesNotExist:
+            logger.error(f"Station not found: {station_id}")
             return Response(
                 {'error': 'Station not found'}, 
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
-            print(f"Error in StationDetailView: {str(e)}")
+            logger.error(f"Error in StationDetailView: {str(e)}")
             return Response(
                 {'error': str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
