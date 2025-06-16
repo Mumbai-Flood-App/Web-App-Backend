@@ -58,7 +58,8 @@ class StationDetailView(APIView):
             # Manually aggregate 15-minute data into daily sums
             daily_sums = {}
             for data in raw_data:
-                date_str = str(data['date'])
+                # Convert naive date to timezone-aware datetime
+                date_str = data['date'].strftime('%Y-%m-%d')
                 if date_str not in daily_sums:
                     daily_sums[date_str] = 0
                 daily_sums[date_str] += data['rainfall']
@@ -76,7 +77,10 @@ class StationDetailView(APIView):
 
             # Add observed data with past predictions
             for date_str, total_rainfall in daily_sums.items():
-                pred_date = datetime.strptime(date_str, '%Y-%m-%d').date() - timedelta(days=1)
+                # Convert string date to timezone-aware datetime
+                date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+                pred_date = date_obj - timedelta(days=1)
+                
                 past_prediction = DaywisePrediction.objects.filter(
                     station=station,
                     timestamp__date=pred_date
@@ -125,6 +129,7 @@ class StationDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
+            print(f"Error in StationDetailView: {str(e)}")  # Add this for debugging
             return Response(
                 {'error': str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
