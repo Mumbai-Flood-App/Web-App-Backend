@@ -43,48 +43,25 @@ class StationDetailView(APIView):
             
             # Create a function to get the start of the rainfall day (11:30 PM previous day)
             def get_rainfall_day_start(date):
-                # Convert to IST
-                ist = pytz.timezone('Asia/Kolkata')
-                start_time = datetime.combine(date - timedelta(days=1), datetime.strptime('23:30', '%H:%M').time())
-                return ist.localize(start_time)
+                return make_aware(datetime.combine(date - timedelta(days=1), datetime.strptime('23:30', '%H:%M').time()))
             
-            # Aggregate data by rainfall day (11:30 PM to 11:30 PM)
-            daily_data = []
-            current_date = three_days_ago
-            while current_date <= today:
-                day_start = get_rainfall_day_start(current_date)
-                day_end = day_start + timedelta(days=1)
-                
-                # Get all records for this period
-                period_records = StationData.objects.filter(
-                    station=station,
-                    timestamp__gte=day_start.astimezone(pytz.UTC),  # Convert to UTC for database query
-                    timestamp__lt=day_end.astimezone(pytz.UTC)      # Convert to UTC for database query
-                ).order_by('timestamp')
-                
-                # Debug logging
-                print(f"\nAnalyzing period for {current_date}:")
-                print(f"Start time (IST): {day_start}")
-                print(f"End time (IST): {day_end}")
-                print(f"Number of records found: {period_records.count()}")
-                
-                if period_records.exists():
-                    first_record = period_records.first()
-                    last_record = period_records.last()
-                    print(f"First record (UTC): {first_record.timestamp} - {first_record.rainfall}mm")
-                    print(f"Last record (UTC): {last_record.timestamp} - {last_record.rainfall}mm")
-                
-                # Calculate total rainfall
-                rainfall = period_records.aggregate(total_rainfall=Sum('rainfall'))['total_rainfall'] or 0
-                
-                daily_data.append({
-                    'date': str(current_date),
-                    'total_rainfall': rainfall
-                })
-                
-                current_date += timedelta(days=1)
+            # Get the start of the rainfall day for three days ago
+            start_time = get_rainfall_day_start(three_days_ago)
+            
+            # Get daily data using TruncDate for initial data
+            daily_data = (
+                StationData.objects
+                .filter(
+                    station=station, 
+                    timestamp__gte=start_time, 
+                    timestamp__lte=now_time
+                )
+                .annotate(date=TruncDate('timestamp'))
+                .values('date')
+                .annotate(total_rainfall=Sum('rainfall'))
+                .order_by('date')
+            )
 
-            # Rest of the code remains the same...
             # Get latest predictions
             pred_daily_data = DaywisePrediction.objects.filter(
                 station=station, 
@@ -97,11 +74,11 @@ class StationDetailView(APIView):
             MAX_REASONABLE_RAINFALL = 1000  # mm, adjust as needed
 
             for data in daily_data:
-                pred_date = datetime.strptime(data['date'], '%Y-%m-%d').date() - timedelta(days=1)
+                pred_date = data['date'] - timedelta(days=1)
                 past_prediction = DaywisePrediction.objects.filter(
                     station=station,
                     timestamp__date=pred_date
-                ).order_by('-timestamp').first()
+                ).order_by('-timestamp').first()  # Get the latest prediction from yesterday
             
                 predicted_value = past_prediction.day1_rainfall if past_prediction else 0
             
