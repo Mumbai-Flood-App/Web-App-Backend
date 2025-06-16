@@ -36,53 +36,60 @@ class StationDetailView(APIView):
         print("=== STATION DETAIL VIEW CODE IS LIVE ===")
         now_time = timezone.now()
         ist = pytz.timezone('Asia/Kolkata')
-        now_ist = now_time.astimezone(ist)
-        today_ist = now_ist.date()
-        three_days_ago_ist = today_ist - timedelta(days=3)
+        
+        # Use UTC dates for calculations
+        today_utc = now_time.date()
+        three_days_ago_utc = today_utc - timedelta(days=3)
 
         try:
             # Fetch station
             station = AWSStation.objects.get(station_id=station_id)
             serializer = AWSStationSerializer(station).data
 
-            # Aggregate daily rainfall for the last 4 IST days
+            # Aggregate daily rainfall for the last 4 UTC days
             update_daily_data = []
             MAX_REASONABLE_RAINFALL = 1000  # mm, adjust as needed
 
             for i in range(4):
-                day = three_days_ago_ist + timedelta(days=i)
-                day_start_naive = datetime.combine(day, datetime.min.time())
-                day_start_ist = make_aware(day_start_naive, ist)
-                if day == today_ist:
+                day_utc = three_days_ago_utc + timedelta(days=i)
+                # Use UTC midnight for start and end of day
+                day_start = timezone.make_aware(datetime.combine(day_utc, datetime.min.time()))
+                if day_utc == today_utc:
                     day_end = now_time
                 else:
-                    day_end_naive = datetime.combine(day, datetime.max.time())
-                    day_end_ist = make_aware(day_end_naive, ist)
-                    day_end = day_end_ist
-                print(f"IST {day} start: {day_start_ist} ({day_start_ist.tzinfo}), end: {day_end} ({day_end.tzinfo})")
+                    day_end = timezone.make_aware(datetime.combine(day_utc + timedelta(days=1), datetime.min.time()))
+                
+                print(f"UTC {day_utc} start: {day_start} ({day_start.tzinfo}), end: {day_end} ({day_end.tzinfo})")
+                
                 records = StationData.objects.filter(
                     station=station,
-                    timestamp__gte=day_start_ist,
-                    timestamp__lte=day_end
+                    timestamp__gte=day_start,
+                    timestamp__lt=day_end  # Use lt instead of lte to avoid double counting
                 )
+                
                 for rec in records:
                     print(f"Included: {rec.timestamp} | {rec.rainfall}")
-                print(f"Total records included for {day}: {records.count()}")
+                print(f"Total records included for {day_utc}: {records.count()}")
+                
                 observed = sum(rec.rainfall for rec in records)
-                print(f"IST {day} rainfall sum: {observed}")
+                print(f"UTC {day_utc} rainfall sum: {observed}")
 
-                # Get prediction for this day
-                pred_date = day - timedelta(days=1)
+                # Convert UTC date to IST for display
+                day_ist = day_utc.astimezone(ist).date()
+                
+                # Get prediction for this day (using UTC date)
+                pred_date = day_utc - timedelta(days=1)
                 past_prediction = DaywisePrediction.objects.filter(
                     station=station,
                     timestamp__date=pred_date
                 ).order_by('-timestamp').first()
+                
                 predicted_value = past_prediction.day1_rainfall if past_prediction else 0
                 if predicted_value > MAX_REASONABLE_RAINFALL or predicted_value < 0:
                     predicted_value = 0
 
                 update_daily_data.append({
-                    'date': day.strftime('%Y-%m-%d'),
+                    'date': day_ist.strftime('%Y-%m-%d'),  # Display date in IST
                     'observed': observed,
                     'predicted': predicted_value,
                     'is_forecasted': False
@@ -93,10 +100,12 @@ class StationDetailView(APIView):
                 station=station, 
                 timestamp__isnull=False
             ).latest('timestamp')
+            
             for i in range(1, 4):
-                future_date = today_ist + timedelta(days=i)
+                future_date_utc = today_utc + timedelta(days=i)
+                future_date_ist = future_date_utc.astimezone(ist).date()
                 update_daily_data.append({
-                    'date': future_date.strftime('%Y-%m-%d'),
+                    'date': future_date_ist.strftime('%Y-%m-%d'),  # Display date in IST
                     'observed': 0,
                     'predicted': getattr(pred_daily_data, f'day{i}_rainfall', 0),
                     'is_forecasted': True
@@ -119,7 +128,7 @@ class StationDetailView(APIView):
             return Response(
                 {'error': str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            ) 
 
 class StationRawDataView(APIView):
     def get(self, request, station_id):
