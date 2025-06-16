@@ -4,7 +4,7 @@ from .models import AWSStation, StationData, DaywisePrediction, HourlyPrediction
 from .serializers import AWSStationSerializer, TrainStationSerializer ,StationDataSerializer, DaywisePredictionSerializer, HourlyPredictionSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.db.models.functions import TruncDate, TruncHour, TruncMinute
+from django.db.models.functions import TruncDate, TruncHour
 from django.db.models import Sum
 from rest_framework import status 
 from django.utils.timezone import now, timedelta
@@ -38,27 +38,20 @@ class StationDetailView(APIView):
             station = AWSStation.objects.get(station_id=station_id)
             serializer = AWSStationSerializer(station).data
 
-            # Get observed data for past 3 days with 15-minute intervals
+            # Get observed data for past 3 days
             three_days_ago = today - timedelta(days=3)
-            
-            # Debug: Get raw 15-minute data first
-            raw_15min_data = StationData.objects.filter(
-                station=station, 
-                timestamp__gte=three_days_ago, 
-                timestamp__lte=now_time
-            ).order_by('timestamp')
-            
-            # Debug: Manual calculation of daily sums
-            manual_daily_sums = {}
-            for data in raw_15min_data:
-                date_str = data.timestamp.strftime('%Y-%m-%d')
-                if date_str not in manual_daily_sums:
-                    manual_daily_sums[date_str] = 0
-                manual_daily_sums[date_str] += data.rainfall
-                print(f"DEBUG - Manual: Date {date_str}, Time {data.timestamp.strftime('%H:%M')}, Rainfall {data.rainfall}, Running total {manual_daily_sums[date_str]}")
-
-            # Database aggregation - using the manual totals since they appear more accurate
-            daily_sums = manual_daily_sums
+            daily_data = (
+                StationData.objects
+                .filter(
+                    station=station, 
+                    timestamp__gte=three_days_ago, 
+                    timestamp__lte=now_time
+                )
+                .annotate(date=TruncDate('timestamp'))
+                .values('date')
+                .annotate(total_rainfall=Sum('rainfall'))
+                .order_by('date')
+            )
 
             # Get latest predictions
             pred_daily_data = DaywisePrediction.objects.filter(
@@ -71,35 +64,28 @@ class StationDetailView(APIView):
             
             MAX_REASONABLE_RAINFALL = 1000  # mm, adjust as needed
 
-            # Add observed data with past predictions
-            for date_str, total_rainfall in daily_sums.items():
-                # Convert string date to timezone-aware datetime
-                date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
-                pred_date = date_obj - timedelta(days=1)
-                
+            for data in daily_data:
+                pred_date = data['date'] - timedelta(days=1)
                 past_prediction = DaywisePrediction.objects.filter(
                     station=station,
                     timestamp__date=pred_date
-                ).order_by('-timestamp').first()
+                ).order_by('-timestamp').first()  # Get the latest prediction from yesterday
             
                 predicted_value = past_prediction.day1_rainfall if past_prediction else 0
             
                 # Debug print
-                print(f"Observed date: {date_str}, pred_date: {pred_date}, predicted_value: {predicted_value}")
-                print(f"DEBUG - Final values for {date_str}:")
-                print(f"  Total rainfall: {total_rainfall}")
+                print(f"Observed date: {data['date']}, pred_date: {pred_date}, predicted_value: {predicted_value}")
             
                 if predicted_value > MAX_REASONABLE_RAINFALL or predicted_value < 0:
-                    print(f"Unreasonable predicted value for {date_str}: {predicted_value}, setting to 0")
+                    print(f"Unreasonable predicted value for {data['date']}: {predicted_value}, setting to 0")
                     predicted_value = 0
             
                 update_daily_data.append({
-                    'date': date_str,
-                    'observed': total_rainfall,
+                    'date': str(data['date']),
+                    'observed': data['total_rainfall'],
                     'predicted': predicted_value,
                     'is_forecasted': False
                 })
-
             # Add future predictions
             for i in range(1, 4):  # Next 3 days
                 future_date = today + timedelta(days=i)
@@ -115,7 +101,10 @@ class StationDetailView(APIView):
 
             return Response({
                 'station': serializer,
-                'daily_data': update_daily_data
+                'daily_data': update_daily_data,
+                #'hrly_data': update_hrly_data,  # Your existing hourly data
+                #'seasonal_data': seasonaldata,  # Your existing seasonal data
+                #'mobile_daily_data': mobile_daily_data  # Your existing mobile data
             })
 
         except AWSStation.DoesNotExist:
@@ -124,7 +113,6 @@ class StationDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
-            print(f"Error in StationDetailView: {str(e)}")  # Add this for debugging
             return Response(
                 {'error': str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
