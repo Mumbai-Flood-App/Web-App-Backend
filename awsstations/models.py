@@ -52,4 +52,12 @@ class TrainStation(models.Model):
 
     def __str__(self):
         return self.station_name
+
+class DailyStationData(models.Model):
+    station = models.ForeignKey('AWSStation', on_delete=models.CASCADE)
+    date = models.DateField()
+    total_rainfall = models.FloatField()
+
+    def __str__(self):
+        return f"{self.station.name} - {self.date} - {self.total_rainfall}"
     
