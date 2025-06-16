@@ -12,7 +12,7 @@ import pandas as pd
 from django.utils.timezone import make_aware
 from datetime import datetime
 from django.utils import timezone
-import logging
+
 
 
 
@@ -30,7 +30,6 @@ class TrainStationListView(APIView):
         return Response(serializer.data)
         # return Response({ 'message': 'Under Construction' }, status=status.HTTP_501_NOT_IMPLEMENTED)
 
-logger = logging.getLogger(__name__)
 class StationDetailView(APIView):
     def get(self, request, station_id):
         now_time = timezone.now()
@@ -44,43 +43,19 @@ class StationDetailView(APIView):
             # Get observed data for past 3 days
             three_days_ago = today - timedelta(days=3)
             
-            # Create a function to get the start of the rainfall day (11:30 PM previous day)
-            def get_rainfall_day_start(date):
-                return make_aware(datetime.combine(date - timedelta(days=1), datetime.strptime('23:30', '%H:%M').time()))
-            
-            # Create a function to get the end of the rainfall day (11:30 PM current day)
-            def get_rainfall_day_end(date):
-                return make_aware(datetime.combine(date, datetime.strptime('23:30', '%H:%M').time()))
-            
-            # Get the start of the rainfall day for three days ago
-            start_time = get_rainfall_day_start(three_days_ago)
-            
-            logger.info(f"Fetching data from {start_time} to {now_time}")
-            
-            # Get daily data using TruncDate for initial data
-            daily_data = []
-            current_date = three_days_ago
-            
-            while current_date <= today:
-                day_start = get_rainfall_day_start(current_date)
-                day_end = get_rainfall_day_end(current_date)
-                
-                # Get rainfall for this period
-                rainfall = StationData.objects.filter(
-                    station=station,
-                    timestamp__gte=day_start,
-                    timestamp__lt=day_end
-                ).aggregate(total_rainfall=Sum('rainfall'))['total_rainfall'] or 0
-                
-                # Log the data for debugging
-                logger.info(f"Date: {current_date}, Start: {day_start}, End: {day_end}, Rainfall: {rainfall}")
-                
-                daily_data.append({
-                    'date': str(current_date),
-                    'total_rainfall': rainfall
-                })
-                
-                current_date += timedelta(days=1)
+            # Get daily data using TruncDate
+            daily_data = (
+                StationData.objects
+                .filter(
+                    station=station, 
+                    timestamp__gte=three_days_ago, 
+                    timestamp__lte=now_time
+                )
+                .annotate(date=TruncDate('timestamp'))
+                .values('date')
+                .annotate(total_rainfall=Sum('rainfall'))
+                .order_by('date')
+            )
 
             # Get latest predictions
             pred_daily_data = DaywisePrediction.objects.filter(
@@ -94,7 +69,7 @@ class StationDetailView(APIView):
             MAX_REASONABLE_RAINFALL = 1000  # mm, adjust as needed
 
             for data in daily_data:
-                pred_date = datetime.strptime(data['date'], '%Y-%m-%d').date() - timedelta(days=1)
+                pred_date = data['date'] - timedelta(days=1)
                 past_prediction = DaywisePrediction.objects.filter(
                     station=station,
                     timestamp__date=pred_date
@@ -103,11 +78,11 @@ class StationDetailView(APIView):
                 predicted_value = past_prediction.day1_rainfall if past_prediction else 0
             
                 if predicted_value > MAX_REASONABLE_RAINFALL or predicted_value < 0:
-                    logger.warning(f"Unreasonable predicted value for {data['date']}: {predicted_value}, setting to 0")
+                    print(f"Unreasonable predicted value for {data['date']}: {predicted_value}, setting to 0")
                     predicted_value = 0
             
                 update_daily_data.append({
-                    'date': data['date'],
+                    'date': str(data['date']),
                     'observed': data['total_rainfall'],
                     'predicted': predicted_value,
                     'is_forecasted': False
@@ -126,24 +101,18 @@ class StationDetailView(APIView):
             # Sort by date to ensure correct order
             update_daily_data.sort(key=lambda x: x['date'])
 
-            # Log final data for debugging
-            logger.info("Final data being sent to frontend:")
-            for data in update_daily_data:
-                logger.info(f"Date: {data['date']}, Observed: {data['observed']}, Predicted: {data['predicted']}")
-
             return Response({
                 'station': serializer,
                 'daily_data': update_daily_data,
             })
 
         except AWSStation.DoesNotExist:
-            logger.error(f"Station not found: {station_id}")
             return Response(
                 {'error': 'Station not found'}, 
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
-            logger.error(f"Error in StationDetailView: {str(e)}")
+            print(f"Error in StationDetailView: {str(e)}")
             return Response(
                 {'error': str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
