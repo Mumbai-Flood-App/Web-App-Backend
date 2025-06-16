@@ -52,6 +52,7 @@ class StationDetailView(APIView):
                 .annotate(total_rainfall=Sum('rainfall'))
                 .order_by('date')
             )
+            print(daily_data.query)
 
             # Debug: print daily sums
             print("=== DEBUG: StationDetailView (daily_data) ===")
