@@ -14,7 +14,6 @@ from datetime import datetime
 from django.utils import timezone
 import pytz
 from collections import defaultdict
-from django.utils.timezone import make_aware
 
 
 class StationListView(APIView):
