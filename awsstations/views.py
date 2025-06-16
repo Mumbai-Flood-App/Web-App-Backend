@@ -128,8 +128,7 @@ class StationDetailView(APIView):
             return Response(
                 {'error': str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            ) 
-
+            )
 class StationRawDataView(APIView):
     def get(self, request, station_id):
         try:
