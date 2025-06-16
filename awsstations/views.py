@@ -29,6 +29,7 @@ class TrainStationListView(APIView):
         # return Response({ 'message': 'Under Construction' }, status=status.HTTP_501_NOT_IMPLEMENTED)
 
 class StationDetailView(APIView):
+    print("=== STATION DETAIL VIEW CODE IS LIVE ===")
     def get(self, request, station_id):
         now_time = timezone.now()
         today = now_time.date()
