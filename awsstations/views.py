@@ -1,7 +1,7 @@
 
 # Create your views here.
-from .models import AWSStation, StationData, DaywisePrediction, HourlyPrediction, TrainStation, DailyStationData, QuarterlyAWSData
-from .serializers import AWSStationSerializer, TrainStationSerializer ,StationDataSerializer, DaywisePredictionSerializer, HourlyPredictionSerializer, DailyStationDataSerializer, QuarterlyAWSDataSerializer
+from .models import AWSStation, StationData, DaywisePrediction, HourlyPrediction, TrainStation, DailyStationData, HourlyAWSData
+from .serializers import AWSStationSerializer, TrainStationSerializer ,StationDataSerializer, DaywisePredictionSerializer, HourlyPredictionSerializer, DailyStationDataSerializer, HourlyAWSDataSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models.functions import TruncDate, TruncHour
@@ -151,8 +151,8 @@ class DailyStationDataListView(APIView):
         serializer = DailyStationDataSerializer(queryset, many=True)
         return Response(serializer.data)
 
-class QuarterlyAWSDataListView(APIView):
+class HourlyAWSDataListView(APIView):
     def get(self, request, station_id):
-        queryset = QuarterlyAWSData.objects.filter(station__station_id=station_id)
-        serializer = QuarterlyAWSDataSerializer(queryset, many=True)
+        queryset = HourlyAWSData.objects.filter(station__station_id=station_id)
+        serializer = HourlyAWSDataSerializer(queryset, many=True)
         return Response(serializer.data)
