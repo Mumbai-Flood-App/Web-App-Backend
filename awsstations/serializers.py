@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AWSStation, StationData, DaywisePrediction, HourlyPrediction, TrainStation, DailyStationData, QuarterlyAWSData
+from .models import AWSStation, StationData, DaywisePrediction, HourlyPrediction, TrainStation, DailyStationData, HourlyAWSData
 
 class AWSStationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -31,7 +31,7 @@ class DailyStationDataSerializer(serializers.ModelSerializer):
         model = DailyStationData
         fields = '__all__'
 
-class QuarterlyAWSDataSerializer(serializers.ModelSerializer):
+class HourlyAWSDataSerializer(serializers.ModelSerializer):
     class Meta:
-        model = QuarterlyAWSData
+        model = HourlyAWSData
         fields = '__all__'
