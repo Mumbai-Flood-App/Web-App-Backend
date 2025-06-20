@@ -11,5 +11,5 @@ urlpatterns = [
     path('tweet/', SaveTweet.as_view()),
     path('hourlyawsdata/', HourlyAWSDataListView.as_view()),
     path('check/', Check().as_view()),
-    path('daywiseprediction/latest-two/', LatestTwoDaywisePredictionsView.as_view())
+    path('daywiseprediction/latest-three/', LatestThreeDaywisePredictionsView.as_view())
 ]
