@@ -158,7 +158,7 @@ class HourlyAWSDataListView(APIView):
         except Exception as e:
             return Response({'status': 'error', 'message': str(e)}, status=400)
 
-class LatestTwoDaywisePredictionsView(APIView):
+class LatestThreeDaywisePredictionsView(APIView): # Renamed for clarity
     def get(self, request):
         station_id = request.GET.get('station')
         if not station_id:
@@ -175,11 +175,11 @@ class LatestTwoDaywisePredictionsView(APIView):
             pred_date = pred.timestamp.date()
             if pred_date not in latest_by_date:
                 latest_by_date[pred_date] = pred
-            if len(latest_by_date) == 2:
+            if len(latest_by_date) == 3: # <--- THE ONLY CHANGE IS HERE
                 break
 
         # Sort by date ASC for frontend
-        latest_two = sorted(latest_by_date.values(), key=lambda p: p.timestamp.date())
+        latest_three = sorted(latest_by_date.values(), key=lambda p: p.timestamp.date())
 
-        serializer = DaywisePredictionSerializer(latest_two, many=True)
+        serializer = DaywisePredictionSerializer(latest_three, many=True)
         return Response(serializer.data)
