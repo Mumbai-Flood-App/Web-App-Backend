@@ -10,5 +10,6 @@ urlpatterns = [
     path('updatetrainstation/', updateTrainStation.as_view()),
     path('tweet/', SaveTweet.as_view()),
     path('hourlyawsdata/', HourlyAWSDataListView.as_view()),
-    path('check/', Check().as_view())
+    path('check/', Check().as_view()),
+    path('daywiseprediction/latest-two/', LatestTwoDaywisePredictionsView.as_view())
 ]
