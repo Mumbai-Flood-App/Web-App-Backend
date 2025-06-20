@@ -19,7 +19,7 @@ class TrainStationSerializer(serializers.ModelSerializer):
 class DaywisePredictionSerializer(serializers.ModelSerializer):
     class Meta:
         model = DaywisePrediction
-        fields = [ 'day1_rainfall', 'day2_rainfall', 'day3_rainfall']
+        fields = [ 'day1_rainfall', 'day2_rainfall', 'day3_rainfall', 'timestamp']
 
 class HourlyPredictionSerializer(serializers.ModelSerializer):
     class Meta:
