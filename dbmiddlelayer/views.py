@@ -157,3 +157,29 @@ class HourlyAWSDataListView(APIView):
             return Response({'status': 'success'})
         except Exception as e:
             return Response({'status': 'error', 'message': str(e)}, status=400)
+
+class LatestTwoDaywisePredictionsView(APIView):
+    def get(self, request):
+        station_id = request.GET.get('station')
+        if not station_id:
+            return Response({'error': 'station parameter is required'}, status=400)
+
+        # Get all predictions for this station, order by timestamp DESC
+        predictions = DaywisePrediction.objects.filter(
+            station__station_id=station_id
+        ).order_by('-timestamp')
+
+        # Use a dict to get only the latest prediction for each date
+        latest_by_date = {}
+        for pred in predictions:
+            pred_date = pred.timestamp.date()
+            if pred_date not in latest_by_date:
+                latest_by_date[pred_date] = pred
+            if len(latest_by_date) == 2:
+                break
+
+        # Sort by date ASC for frontend
+        latest_two = sorted(latest_by_date.values(), key=lambda p: p.timestamp.date())
+
+        serializer = DaywisePredictionSerializer(latest_two, many=True)
+        return Response(serializer.data)
